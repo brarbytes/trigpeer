@@ -1,78 +1,184 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+import { Amplify } from 'aws-amplify';
+import { getCurrentUser, signIn, signInWithRedirect, signOut } from 'aws-amplify/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Dimensions, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-const EXPO_PUBLIC_SUPABASE_URL = 'https://ikgbpowjpuepywtloase.supabase.co';
-const EXPO_PUBLIC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZ2Jwb3dqcHVlcHl3dGxvYXNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3Mzg0MzAsImV4cCI6MjA2MjMxNDQzMH0.wWGyZ8N6Z_zH6YXadfsXWfCce2hNGHeCcKCZeJTdePU';
-const supabaseClient = createClient(EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// AWS Cognito configuration
+const awsConfig = {
+  Auth: {
+    Cognito: {
+      userPoolId: 'us-east-2_WSq529He2',
+      userPoolClientId: '5950mo7fcq7rtvr7i95g69j0mt',
+      region: 'us-east-2',
+      loginWith: {
+        phone: true,
+        email: false
+      },
+      signUpVerificationMethod: 'code',
+      userAttributes: {
+        phone_number: {
+          required: true
+        }
+      }
+    }
+  }
+};
+
+// Initialize Amplify with error handling
+try {
+  Amplify.configure(awsConfig);
+  console.log('Amplify configured successfully');
+} catch (error) {
+  console.error('Error configuring Amplify:', error);
+}
 
 const { width } = Dimensions.get('window');
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(false);
 
-  const handleEmailLogin = async () => {
+  useEffect(() => {
+    // Verify Amplify configuration
     try {
-      setLoading(true);
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const config = Amplify.getConfig();
+      console.log('Current Amplify config:', config);
+      setIsConfigured(true);
+    } catch (error) {
+      console.error('Error verifying Amplify config:', error);
+      setIsConfigured(false);
+    }
+  }, []);
 
-      if (error) throw error;
-      router.replace('/');
+  // Check for existing authentication
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          console.log('User already authenticated, redirecting to home...');
+          router.replace('/');
+        }
+      } catch (error) {
+        // No user is signed in, stay on login page
+        console.log('No authenticated user found');
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  const handlePhoneLogin = async () => {
+    try {
+      if (!isConfigured) {
+        Alert.alert('Error', 'Authentication service is not properly configured. Please try again later.');
+        return;
+      }
+
+      if (!password) {
+        Alert.alert('Error', 'Please enter your password');
+        return;
+      }
+
+      setLoading(true);
+      const formattedPhoneWithPrefix = `+1${phoneNumber}`;
+      console.log('Login attempt details:', { 
+        username: formattedPhoneWithPrefix,
+        password
+      });
+   
+      try {
+        // Check if there's an existing session and sign out if there is
+        try {
+          const currentUser = await getCurrentUser();
+          if (currentUser) {
+            await signOut();
+            console.log('Signed out existing user');
+          }
+        } catch (error) {
+          // Ignore error if no user is signed in
+          console.log('No existing user session');
+        }
+
+        const { isSignedIn, nextStep } = await signIn({
+          username: formattedPhoneWithPrefix,
+          password,
+          options: {
+            authFlowType: 'USER_PASSWORD_AUTH'
+          }
+        });
+   
+        console.log('Sign in response:', { isSignedIn, nextStep });
+   
+        if (isSignedIn) {
+          console.log('Login successful. Redirecting...');
+          router.replace('/');
+        } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE') {
+          Alert.alert(
+            'Verification Required',
+            'Please enter the verification code sent to your phone.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/signup'),
+              },
+            ]
+          );
+        } else if (nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
+          Alert.alert(
+            'Account Not Verified',
+            'Please verify your account first. Check your phone for the verification code.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/signup'),
+              },
+            ]
+          );
+        } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+          Alert.alert(
+            'Password Change Required',
+            'You need to set a new password.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/reset-password'),
+              },
+            ]
+          );
+        }
+      } catch (error: any) {
+        console.error('Login error details:', {
+          name: error.name,
+          message: error.message,
+          code: error.code,
+          stack: error.stack,
+          error: error
+        });
+        Alert.alert('Error', 'Invalid phone number or password');
+      }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'An error occurred during login');
+      console.error('Login error:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'apple') => {
+  const handleSocialLogin = async (provider: 'Google' | 'Apple') => {
     try {
       setLoading(true);
-      const { data, error } = await supabaseClient.auth.signInWithOAuth({
+      await signInWithRedirect({
         provider,
-        options: {
-          redirectTo: 'trigpeer://login-callback',
-          skipBrowserRedirect: true,
-        },
+        customState: JSON.stringify({ redirectUrl: 'trigpeer://' })
       });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        // Open the OAuth URL in the browser
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          'trigpeer://login-callback'
-        );
-
-        if (result.type === 'success') {
-          const { url } = result;
-          // Handle the OAuth callback
-          const { error: sessionError } = await supabaseClient.auth.getSession();
-          if (sessionError) throw sessionError;
-          
-          // Navigate to home on successful login
-          router.replace('/');
-        }
-      }
     } catch (error: any) {
+      console.error('Social login error:', error);
       Alert.alert('Error', error?.message || 'An error occurred during social login');
     } finally {
       setLoading(false);
@@ -95,15 +201,15 @@ export default function Login() {
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+            <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Phone Number (10 digits)"
               placeholderTextColor="#666"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+              maxLength={10}
             />
           </View>
 
@@ -128,7 +234,7 @@ export default function Login() {
 
           <Pressable
             style={[styles.loginButton, loading && styles.buttonDisabled]}
-            onPress={handleEmailLogin}
+            onPress={handlePhoneLogin}
             disabled={loading}
           >
             <Text style={styles.loginButtonText}>
@@ -136,7 +242,8 @@ export default function Login() {
             </Text>
           </Pressable>
 
-          <View style={styles.divider}>
+          {/* Temporarily hiding social login buttons */}
+          {/* <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OR</Text>
             <View style={styles.dividerLine} />
@@ -145,7 +252,7 @@ export default function Login() {
           <View style={styles.socialButtonsContainer}>
             <Pressable
               style={[styles.socialButton, styles.googleButton]}
-              onPress={() => handleSocialLogin('google')}
+              onPress={() => handleSocialLogin('Google')}
             >
               <Ionicons name="logo-google" size={24} color="#fff" />
               <Text style={styles.socialButtonText}>Google</Text>
@@ -153,12 +260,12 @@ export default function Login() {
 
             <Pressable
               style={[styles.socialButton, styles.appleButton]}
-              onPress={() => handleSocialLogin('apple')}
+              onPress={() => handleSocialLogin('Apple')}
             >
               <Ionicons name="logo-apple" size={24} color="#fff" />
               <Text style={styles.socialButtonText}>Apple</Text>
             </Pressable>
-          </View>
+          </View> */}
 
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>

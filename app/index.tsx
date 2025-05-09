@@ -1,41 +1,36 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+import { getCurrentUser, signOut } from 'aws-amplify/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-const EXPO_PUBLIC_SUPABASE_URL = 'https://ikgbpowjpuepywtloase.supabase.co';
-const EXPO_PUBLIC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZ2Jwb3dqcHVlcHl3dGxvYXNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3Mzg0MzAsImV4cCI6MjA2MjMxNDQzMH0.wWGyZ8N6Z_zH6YXadfsXWfCce2hNGHeCcKCZeJTdePU';
-
-const supabaseClient = createClient(EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
-
 export default function Home() {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userPhone, setUserPhone] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get the current user's email
-    supabaseClient.auth.getUser().then(({ data: { user } }) => {
-      setUserEmail(user?.email ?? null);
-    });
+    // Get the current user's phone number
+    const fetchUser = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        setUserPhone(currentUser?.username ?? null);
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+    };
+
+    fetchUser();
   }, []);
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabaseClient.auth.signOut();
-      if (error) throw error;
+      await signOut();
+      console.log('Successfully signed out');
       // Force a navigation to login page
       router.replace('/login');
       // Clear any cached navigation state
       router.setParams({});
     } catch (error: any) {
+      console.error('Logout error:', error);
       Alert.alert('Error', error?.message || 'An error occurred during logout');
     }
   };
@@ -48,7 +43,7 @@ export default function Home() {
       <View style={styles.contentContainer}>
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeText}>Welcome!</Text>
-          <Text style={styles.emailText}>{userEmail}</Text>
+          <Text style={styles.phoneText}>{userPhone}</Text>
         </View>
 
         <Pressable
@@ -93,7 +88,7 @@ const styles = StyleSheet.create({
     color: '#4c669f',
     marginBottom: 10,
   },
-  emailText: {
+  phoneText: {
     fontSize: 16,
     color: '#666',
   },
