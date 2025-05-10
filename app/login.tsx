@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Amplify } from 'aws-amplify';
-import { getCurrentUser, signIn, signInWithRedirect, signOut } from 'aws-amplify/auth';
+import { fetchAuthSession, getCurrentUser, signIn, signInWithRedirect, signOut } from 'aws-amplify/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -37,11 +37,99 @@ try {
 
 const { width } = Dimensions.get('window');
 
+// WebSocket connection function
+const connectWebSocket = async () => {
+  try {
+    const session = await fetchAuthSession();
+    const idToken = session.tokens?.idToken?.toString();
+    
+    if (!idToken) {
+      throw new Error('No ID token available');
+    }
+
+    console.log('Attempting WebSocket connection...');
+    const wsUrl = `ws://ec2-3-144-90-91.us-east-2.compute.amazonaws.com:3000/ws?token=${idToken}`;
+    console.log('WebSocket URL:', wsUrl);
+    
+    const ws = new WebSocket(wsUrl);
+
+    // Add connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        console.log('WebSocket connection timeout. Current state:', ws.readyState);
+        ws.close();
+      }
+    }, 10000);
+
+    ws.onopen = () => {
+      console.log('WebSocket Connected Successfully');
+      clearTimeout(connectionTimeout);
+    };
+
+    ws.onclose = (event) => {
+      console.log('WebSocket Disconnected:', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+        readyState: ws.readyState,
+        timestamp: new Date().toISOString()
+      });
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket Error:', error);
+      console.log('WebSocket Details:', {
+        state: ws.readyState,
+        url: ws.url,
+        protocol: ws.protocol,
+        extensions: ws.extensions,
+        timestamp: new Date().toISOString()
+      });
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket Message Received:', {
+          type: data.type,
+          count: data.count,
+          rawData: event.data,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Handle different message types
+        switch (data.type) {
+          case 'onlineCount':
+            console.log('Processing online count update:', {
+              count: data.count,
+              timestamp: new Date().toISOString()
+            });
+            break;
+          default:
+            console.log('Unknown message type:', data.type);
+        }
+      } catch (error) {
+        console.log('Error parsing WebSocket message:', {
+          error: error,
+          rawData: event.data,
+          timestamp: new Date().toISOString()
+        });
+      }
+    };
+
+    return ws;
+  } catch (error) {
+    console.error('Error connecting to WebSocket:', error);
+    throw error;
+  }
+};
+
 export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
     // Verify Amplify configuration
@@ -62,6 +150,13 @@ export default function Login() {
         const currentUser = await getCurrentUser();
         if (currentUser) {
           console.log('User already authenticated, redirecting to home...');
+          // Connect to WebSocket before redirecting
+          try {
+            const websocket = await connectWebSocket();
+            setWs(websocket);
+          } catch (error) {
+            console.error('Failed to connect to WebSocket:', error);
+          }
           router.replace('/');
         }
       } catch (error) {
@@ -116,8 +211,20 @@ export default function Login() {
         console.log('Sign in response:', { isSignedIn, nextStep });
    
         if (isSignedIn) {
-          console.log('Login successful. Redirecting...');
-          router.replace('/');
+          console.log('Login successful. Connecting to WebSocket...');
+          try {
+            const websocket = await connectWebSocket();
+            setWs(websocket);
+            console.log('WebSocket connected successfully');
+            router.replace({
+              pathname: '/',
+              params: { ws: websocket }
+            });
+          } catch (error) {
+            console.error('Failed to connect to WebSocket:', error);
+            Alert.alert('Warning', 'Login successful but failed to connect to real-time service');
+            router.replace('/');
+          }
         } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE') {
           Alert.alert(
             'Verification Required',

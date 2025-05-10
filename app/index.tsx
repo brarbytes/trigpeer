@@ -1,37 +1,49 @@
+import { OnlineStatus } from '@/components/OnlineStatus';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 import { getCurrentUser, signOut } from 'aws-amplify/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-export default function Home() {
-  const [userPhone, setUserPhone] = useState<string | null>(null);
+export default function HomeScreen() {
+  const [user, setUser] = useState<string>('');
+  const { ws } = useWebSocket();
 
   useEffect(() => {
-    // Get the current user's phone number
-    const fetchUser = async () => {
+    const checkUser = async () => {
       try {
         const currentUser = await getCurrentUser();
-        setUserPhone(currentUser?.username ?? null);
+        setUser(currentUser.username);
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error getting current user:', error);
+        router.replace('/login');
       }
     };
 
-    fetchUser();
+    checkUser();
   }, []);
 
   const handleLogout = async () => {
     try {
+      if (ws) {
+        console.log('Closing WebSocket connection during logout...');
+        console.log('WebSocket state before close:', {
+          readyState: ws.readyState,
+          url: ws.url,
+          timestamp: new Date().toISOString()
+        });
+        
+        ws.close();
+        
+        console.log('WebSocket closed during logout');
+      }
+      
       await signOut();
-      console.log('Successfully signed out');
-      // Force a navigation to login page
       router.replace('/login');
-      // Clear any cached navigation state
-      router.setParams({});
-    } catch (error: any) {
+    } catch (error) {
       console.error('Logout error:', error);
-      Alert.alert('Error', error?.message || 'An error occurred during logout');
+      Alert.alert('Error', 'Failed to log out');
     }
   };
 
@@ -43,8 +55,10 @@ export default function Home() {
       <View style={styles.contentContainer}>
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeText}>Welcome!</Text>
-          <Text style={styles.phoneText}>{userPhone}</Text>
+          <Text style={styles.phoneText}>{user}</Text>
         </View>
+
+        <OnlineStatus />
 
         <Pressable
           style={styles.logoutButton}
@@ -97,6 +111,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 12,
+    marginTop: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
