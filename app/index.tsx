@@ -1,10 +1,9 @@
-import { OnlineStatus } from '@/components/OnlineStatus';
+import TabView from '@/components/TabView';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { getCurrentUser, signOut } from 'aws-amplify/auth';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 
 export default function HomeScreen() {
   const [user, setUser] = useState<string>('');
@@ -48,82 +47,15 @@ export default function HomeScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#4c669f', '#3b5998', '#192f6a']}
-      style={styles.container}
-    >
-      <View style={styles.contentContainer}>
-        <View style={styles.welcomeContainer}>
-          <Text style={styles.welcomeText}>Welcome!</Text>
-          <Text style={styles.phoneText}>{user}</Text>
-        </View>
-
-        <OnlineStatus />
-
-        <Pressable
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </Pressable>
-      </View>
-    </LinearGradient>
+    <View style={styles.container}>
+      <TabView onLogout={handleLogout} username={user} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  contentContainer: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  welcomeContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  welcomeText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4c669f',
-    marginBottom: 10,
-  },
-  phoneText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  logoutButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 12,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  logoutButtonText: {
-    color: '#4c669f',
-    fontSize: 18,
-    fontWeight: 'bold',
+    backgroundColor: '#ffffff',
   },
 }); 
