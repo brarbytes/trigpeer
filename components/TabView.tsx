@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TabViewProps {
@@ -8,7 +8,7 @@ interface TabViewProps {
   username: string;
 }
 
-type IconName = 'home' | 'home-outline' | 'compass' | 'compass-outline' | 'add-circle' | 'add-circle-outline' | 'people' | 'people-outline' | 'person' | 'person-outline' | 'star' | 'heart' | 'heart-outline' | 'chatbubble-outline' | 'share-outline' | 'search' | 'options-outline' | 'log-out-outline';
+type IconName = 'home' | 'home-outline' | 'compass' | 'compass-outline' | 'add-circle' | 'add-circle-outline' | 'people' | 'people-outline' | 'person' | 'person-outline' | 'star' | 'heart' | 'heart-outline' | 'chatbubble-outline' | 'share-outline' | 'search' | 'options-outline' | 'log-out-outline' | 'arrow-back' | 'help-circle-outline' | 'download-outline' | 'trash-outline';
 
 interface Tab {
   key: string;
@@ -89,19 +89,42 @@ interface Expert {
 
 interface Question {
   id: string;
-  title: string;
-  description: string;
+  user_sub: string;
+  user_name: string;
+  question_text: string;
+  created_at: string;
+  status: 'pending' | 'answered' | 'validated' | 'rejected' | 'approved';
+  answered_by?: string;
+  answerer_name?: string;
+  answer_text?: string;
+  answered_at?: string;
   tags: string[];
   emotions: string[];
-  status: 'pending' | 'answered' | 'validated' | 'rejected';
-  expertId?: string;
-  validatorId?: string;
-  answer?: string;
-  validation?: {
-    validatorId: string;
-    status: 'approved' | 'rejected';
-    feedback?: string;
-  };
+}
+
+interface Expertise {
+  id: string;
+  name: string;
+  level: 'beginner' | 'intermediate' | 'expert';
+  yearsOfExperience: number;
+  certifications?: string[];
+}
+
+interface Activity {
+  id: string;
+  type: 'question' | 'answer' | 'validation' | 'points';
+  title: string;
+  description: string;
+  date: string;
+  points?: number;
+}
+
+interface SecuritySession {
+  id: string;
+  device: string;
+  location: string;
+  lastActive: string;
+  isCurrent: boolean;
 }
 
 // Mock data for the feed
@@ -177,32 +200,47 @@ const experts: Expert[] = [
     totalAnswers: 32,
     totalValidations: 120,
   },
+  {
+    id: '3',
+    name: 'John Doe',
+    avatar: 'https://i.pravatar.cc/150?img=3',
+    expertise: ['javascript', 'typescript'],
+    rating: 4.7,
+    currentQuestions: 0,
+    maxQuestions: 5,
+    validationCount: 200,
+    points: 1500,
+    level: 15,
+    totalAnswers: 60,
+    totalValidations: 200,
+  }
 ];
 
 // Mock questions data
 const questions: Question[] = [
   {
     id: '1',
-    title: 'What are the best practices for React Native performance optimization?',
-    description: 'I\'m experiencing slow rendering in my React Native app...',
+    user_sub: '1',
+    user_name: 'Sarah Chen',
+    question_text: 'What are the best practices for React Native performance optimization?',
+    created_at: '2024-04-01T12:00:00',
+    status: 'pending',
     tags: ['react-native', 'performance', 'mobile'],
     emotions: ['curious', 'excited'],
-    status: 'pending',
   },
   {
     id: '2',
-    title: 'How do you handle state management in large-scale applications?',
-    description: 'We\'re building a large application and need advice...',
+    user_sub: '2',
+    user_name: 'Mike Johnson',
+    question_text: 'How do you handle state management in large-scale applications?',
+    created_at: '2024-04-02T14:00:00',
+    status: 'answered',
+    answered_by: '1',
+    answerer_name: 'Sarah Chen',
+    answer_text: 'Here are the best practices...',
+    answered_at: '2024-04-02T15:00:00',
     tags: ['state-management', 'architecture'],
     emotions: ['focused', 'determined'],
-    status: 'answered',
-    expertId: '1',
-    answer: 'Here are the best practices...',
-    validation: {
-      validatorId: '2',
-      status: 'approved',
-      feedback: 'Great answer, very comprehensive!',
-    },
   },
 ];
 
@@ -223,6 +261,55 @@ export default function TabView({ onLogout, username }: TabViewProps) {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
   const [answer, setAnswer] = useState('');
+  const [viewedProfile, setViewedProfile] = useState<Expert | null>(null);
+  const [expandedTags, setExpandedTags] = useState<{[key: string]: boolean}>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expertise, setExpertise] = useState<Expertise[]>([
+    { id: '1', name: 'React Native', level: 'expert', yearsOfExperience: 3 },
+    { id: '2', name: 'TypeScript', level: 'intermediate', yearsOfExperience: 2 }
+  ]);
+  const [activities, setActivities] = useState<Activity[]>([
+    {
+      id: '1',
+      type: 'answer',
+      title: 'Answered a question about React Native',
+      description: 'Provided detailed explanation about performance optimization',
+      date: '2024-03-15T10:30:00',
+      points: 25
+    },
+    {
+      id: '2',
+      type: 'validation',
+      title: 'Validated an answer',
+      description: 'Reviewed and approved a technical solution',
+      date: '2024-03-14T15:45:00',
+      points: 10
+    }
+  ]);
+  const [sessions, setSessions] = useState<SecuritySession[]>([
+    {
+      id: '1',
+      device: 'iPhone 13',
+      location: 'San Francisco, CA',
+      lastActive: '2024-03-15T10:30:00',
+      isCurrent: true
+    },
+    {
+      id: '2',
+      device: 'MacBook Pro',
+      location: 'San Francisco, CA',
+      lastActive: '2024-03-14T15:45:00',
+      isCurrent: false
+    }
+  ]);
+  const [preferences, setPreferences] = useState({
+    preferredTopics: ['react-native', 'typescript', 'mobile-development'],
+    language: 'en',
+    timezone: 'America/Los_Angeles',
+    theme: 'light'
+  });
+
+  const QUESTIONS_PER_PAGE = 10;
 
   const emotions = [
     'curious', 'excited', 'focused', 'determined', 'confused',
@@ -253,6 +340,13 @@ export default function TabView({ onLogout, username }: TabViewProps) {
     );
   };
 
+  const toggleTags = (itemId: string) => {
+    setExpandedTags(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
   const findExpertForQuestion = (question: Question): Expert | null => {
     // First try to find an expert with matching expertise and available slots
     const primaryExpert = experts.find(expert => 
@@ -280,11 +374,13 @@ export default function TabView({ onLogout, username }: TabViewProps) {
 
     const newQuestion: Question = {
       id: Date.now().toString(),
-      title: questionTitle,
-      description: questionDescription,
+      user_sub: '1',
+      user_name: 'Sarah Chen',
+      question_text: questionTitle,
+      created_at: new Date().toISOString(),
+      status: 'pending',
       tags: selectedTags,
       emotions: selectedEmotions,
-      status: 'pending',
     };
 
     const expert = findExpertForQuestion(newQuestion);
@@ -381,8 +477,10 @@ export default function TabView({ onLogout, username }: TabViewProps) {
         ...currentQuestion,
         status: 'answered',
         answer,
-        expertId: selectedExpert.id,
-        validatorId: validator.id,
+        answered_by: selectedExpert.id,
+        answerer_name: selectedExpert.name,
+        answer_text: answer,
+        answered_at: new Date().toISOString(),
       };
 
       console.log('Question sent for validation to:', validator.name);
@@ -402,40 +500,35 @@ export default function TabView({ onLogout, username }: TabViewProps) {
 
   const handleValidation = (questionId: string, validatorId: string, status: 'approved' | 'rejected') => {
     const question = questions.find(q => q.id === questionId);
-    if (!question || !question.expertId) return;
+    if (!question || !question.answered_by) return;
 
     // Award points for validation
     awardPoints(validatorId, 'validation');
 
     // If approved, award additional points to the answerer
     if (status === 'approved') {
-      awardPoints(question.expertId, 'approved');
+      awardPoints(question.answered_by, 'approved');
     }
 
     // Update question validation status
-    question.validation = {
-      validatorId,
-      status,
-      feedback: status === 'approved' ? 'Great answer!' : 'Needs improvement',
-    };
+    question.status = status === 'approved' ? 'validated' : 'rejected';
   };
 
   const renderQuestionValidation = (question: Question) => {
-    if (question.status !== 'answered' || !question.validation) return null;
+    if (question.status !== 'validated' && question.status !== 'rejected') return null;
 
     return (
       <View style={styles.validationContainer}>
-        <Text style={styles.validationTitle}>Validation Status</Text>
         <View style={[
           styles.validationBadge,
-          question.validation.status === 'approved' ? styles.approvedBadge : styles.rejectedBadge
+          question.status === 'validated' ? styles.approvedBadge : styles.rejectedBadge
         ]}>
           <Text style={styles.validationText}>
-            {question.validation.status === 'approved' ? 'Approved' : 'Rejected'}
+            {question.status === 'validated' ? 'Approved' : 'Rejected'}
           </Text>
         </View>
-        {question.validation.feedback && (
-          <Text style={styles.validationFeedback}>{question.validation.feedback}</Text>
+        {question.answer_text && (
+          <Text style={styles.validationFeedback}>{question.answer_text}</Text>
         )}
       </View>
     );
@@ -473,91 +566,177 @@ export default function TabView({ onLogout, username }: TabViewProps) {
     );
   };
 
+  const handleViewProfile = (userId: string) => {
+    const expert = experts.find(e => e.id === userId);
+    if (expert) {
+      setViewedProfile(expert);
+      setActiveTab('profile');
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Format time as HH:MM AM/PM
+    const time = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Check if it's today
+    if (date.toDateString() === now.toDateString()) {
+      return `Today at ${time}`;
+    }
+    
+    // Check if it's yesterday
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday at ${time}`;
+    }
+
+    // For other dates, show the date and time
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ` at ${time}`;
+  };
+
   const renderFeedItem = (item: FeedItem) => {
-    const isLiked = likedPosts.includes(item.id);
     const question = questions.find(q => q.id === item.id);
-    const expert = question?.expertId ? experts.find(e => e.id === question.expertId) : null;
-    
-    const getSkillBadgeStyle = (level: SkillLevel) => {
-      switch (level) {
-        case 'expert':
-          return styles.expertBadge;
-        case 'intermediate':
-          return styles.intermediateBadge;
-        case 'beginner':
-          return styles.beginnerBadge;
-        default:
-          return {};
-      }
-    };
-    
+    if (!question) return null;
+
+    const isTagsExpanded = expandedTags[item.id];
+
     return (
       <View key={item.id} style={styles.feedItem}>
-        <View style={styles.feedHeader}>
-          <Image source={{ uri: item.avatar }} style={styles.avatar} />
-          <View style={styles.feedHeaderText}>
-            <View style={styles.authorRow}>
-              <Text style={styles.authorName}>{item.author}</Text>
-              {expert && (
-                <View style={[styles.skillBadge, getSkillBadgeStyle(item.skillLevel)]}>
-                  <Text style={styles.skillText}>Level {expert.level}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.timeAgo}>{item.timeAgo}</Text>
-          </View>
-          <View style={styles.earningsBadge}>
-            <Ionicons name="star" size={16} color="#f59e0b" />
-            <Text style={styles.earningsText}>{item.earnings}</Text>
-          </View>
-        </View>
-        
-        <Text style={styles.questionText}>{item.question}</Text>
-        
-        {expert && renderExpertStats(expert)}
-        
-        <View style={styles.emotionsContainer}>
-          {item.emotions.map(emotion => (
-            <View key={emotion} style={styles.emotionTag}>
-              <Text style={styles.emotionText}>{emotion}</Text>
-            </View>
-          ))}
-        </View>
-        
-        <View style={styles.tagsContainer}>
-          {item.tags.map(tag => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>#{tag}</Text>
-            </View>
-          ))}
-        </View>
-
-        {question && renderQuestionValidation(question)}
-
-        <View style={styles.interactionBar}>
+        <View style={styles.feedItemHeader}>
           <TouchableOpacity 
-            style={styles.interactionButton}
-            onPress={() => toggleLike(item.id)}
+            style={styles.authorInfo}
+            onPress={() => handleViewProfile(question.user_sub)}
           >
-            <Ionicons 
-              name={isLiked ? "heart" : "heart-outline"} 
-              size={20} 
-              color={isLiked ? "#ef4444" : "#64748b"} 
+            <Image
+              source={{ uri: item.avatar }}
+              style={styles.avatar}
             />
-            <Text style={[styles.interactionText, isLiked && styles.likedText]}>
-              {isLiked ? item.likes + 1 : item.likes}
-            </Text>
+            <View>
+              <Text style={styles.authorName}>{question.user_name || 'Anonymous'}</Text>
+              <Text style={styles.timeAgo}>
+                {formatDate(question.created_at)}
+              </Text>
+            </View>
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.interactionButton}>
-            <Ionicons name="chatbubble-outline" size={20} color="#64748b" />
-            <Text style={styles.interactionText}>{item.comments}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.interactionButton}>
-            <Ionicons name="share-outline" size={20} color="#64748b" />
+          <TouchableOpacity>
+            <Ionicons name="options-outline" size={24} color="#666" />
           </TouchableOpacity>
         </View>
+
+        <Text style={styles.questionText}>{question.question_text}</Text>
+
+        {question.status === 'answered' && question.answer_text && (
+          <View style={styles.answerContainer}>
+            <Text style={styles.answerLabel}>Answer:</Text>
+            <Text style={styles.answerText}>{question.answer_text}</Text>
+            <TouchableOpacity 
+              onPress={() => handleViewProfile(question.answered_by || '')}
+            >
+              <Text style={styles.answererName}>
+                Answered by: {question.answerer_name || 'Anonymous'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity 
+          style={styles.tagsHeader}
+          onPress={() => toggleTags(item.id)}
+        >
+          <View style={styles.colorStrip}>
+            <View style={[styles.colorSegment, styles.redSegment]} />
+            <View style={[styles.colorSegment, styles.greenSegment]} />
+            <View style={[styles.colorSegment, styles.blueSegment]} />
+          </View>
+          <Ionicons 
+            name={isTagsExpanded ? 'chevron-up' : 'chevron-down'} 
+            size={16} 
+            color="#64748b" 
+            style={styles.expandIcon}
+          />
+        </TouchableOpacity>
+
+        {isTagsExpanded && (
+          <>
+            <View style={styles.tagsContainer}>
+              {question.tags?.map((tag, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.emotionsContainer}>
+              {question.emotions?.map((emotion, index) => (
+                <View key={index} style={styles.emotion}>
+                  <Text style={styles.emotionText}>{emotion}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        <View style={styles.feedItemFooter}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="heart-outline" size={20} color="#666" />
+            <Text style={styles.actionText}>Like</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="chatbubble-outline" size={20} color="#666" />
+            <Text style={styles.actionText}>Comment</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="share-outline" size={20} color="#666" />
+            <Text style={styles.actionText}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const getPaginatedQuestions = () => {
+    const startIndex = (currentPage - 1) * QUESTIONS_PER_PAGE;
+    const endIndex = startIndex + QUESTIONS_PER_PAGE;
+    return feedItems.slice(startIndex, endIndex);
+  };
+
+  const totalPages = Math.ceil(feedItems.length / QUESTIONS_PER_PAGE);
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <View style={styles.paginationContainer}>
+        <TouchableOpacity 
+          style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+          onPress={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+          disabled={currentPage === 1}
+        >
+          <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#cbd5e1' : '#64748b'} />
+        </TouchableOpacity>
+        
+        <Text style={styles.paginationText}>
+          Page {currentPage} of {totalPages}
+        </Text>
+
+        <TouchableOpacity 
+          style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+          onPress={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+          disabled={currentPage === totalPages}
+        >
+          <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#cbd5e1' : '#64748b'} />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -568,12 +747,30 @@ export default function TabView({ onLogout, username }: TabViewProps) {
         return (
           <View style={styles.contentContainer}>
             <View style={styles.feedHeader}>
-              <Text style={styles.feedTitle}>Recent Questions</Text>
+              <View>
+                <Text style={styles.feedTitle}>Your Questions</Text>
+                <Text style={styles.feedSubtitle}>
+                  {feedItems.length} {feedItems.length === 1 ? 'question' : 'questions'} answered
+                </Text>
+              </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Ionicons name="options-outline" size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
-            {feedItems.map(renderFeedItem)}
+            {feedItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="help-circle-outline" size={48} color="#94a3b8" />
+                <Text style={styles.emptyStateTitle}>No Questions Yet</Text>
+                <Text style={styles.emptyStateText}>
+                  Your answered questions will appear here. Tap the Ask tab to get started!
+                </Text>
+              </View>
+            ) : (
+              <>
+                {getPaginatedQuestions().map(renderFeedItem)}
+                {renderPagination()}
+              </>
+            )}
           </View>
         );
       case 'discover':
@@ -583,11 +780,11 @@ export default function TabView({ onLogout, username }: TabViewProps) {
               <Ionicons name="search" size={20} color="#64748b" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search questions, topics, or users..."
+                placeholder="Search your questions..."
                 placeholderTextColor="#94a3b8"
               />
             </View>
-            <Text style={styles.sectionTitle}>Trending Topics</Text>
+            <Text style={styles.sectionTitle}>Your Topics</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.trendingContainer}>
               {suggestedTags.map(tag => (
                 <TouchableOpacity key={tag} style={styles.trendingTag}>
@@ -595,18 +792,21 @@ export default function TabView({ onLogout, username }: TabViewProps) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <Text style={styles.sectionTitle}>Recommended for You</Text>
+            <Text style={styles.sectionTitle}>Your Answered Questions</Text>
             {feedItems.map(renderFeedItem)}
           </View>
         );
       case 'ask':
         return (
           <View style={styles.contentContainer}>
-            <Text style={styles.title}>Ask a Question</Text>
+            <Text style={styles.title}>Ask Anonymously</Text>
+            <Text style={styles.subtitle}>
+              Your question will be answered by a verified expert. Your identity remains private.
+            </Text>
             
             <TextInput
               style={styles.input}
-              placeholder="Title"
+              placeholder="What would you like to know?"
               placeholderTextColor="#94a3b8"
               value={questionTitle}
               onChangeText={setQuestionTitle}
@@ -614,7 +814,7 @@ export default function TabView({ onLogout, username }: TabViewProps) {
             
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Description"
+              placeholder="Add more details to help experts understand your question better..."
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={4}
@@ -623,6 +823,9 @@ export default function TabView({ onLogout, username }: TabViewProps) {
             />
 
             <Text style={styles.sectionTitle}>How are you feeling?</Text>
+            <Text style={styles.sectionSubtitle}>
+              This helps us match you with the right expert
+            </Text>
             <View style={styles.emotionsContainer}>
               {emotions.map(emotion => (
                 <TouchableOpacity
@@ -643,7 +846,10 @@ export default function TabView({ onLogout, username }: TabViewProps) {
               ))}
             </View>
 
-            <Text style={styles.sectionTitle}>Add Tags</Text>
+            <Text style={styles.sectionTitle}>Add Topics</Text>
+            <Text style={styles.sectionSubtitle}>
+              Select relevant topics to help experts find your question
+            </Text>
             <View style={styles.tagsContainer}>
               {suggestedTags.map(tag => (
                 <TouchableOpacity
@@ -695,53 +901,252 @@ export default function TabView({ onLogout, username }: TabViewProps) {
           </View>
         );
       case 'profile':
-        return (
-          <View style={styles.contentContainer}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{username}</Text>
-                <Text style={styles.profileStats}>Member since 2024</Text>
-              </View>
-            </View>
-            
-            <View style={styles.profileStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>0</Text>
-                <Text style={styles.statLabel}>Questions</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>0</Text>
-                <Text style={styles.statLabel}>Answers</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>0</Text>
-                <Text style={styles.statLabel}>Reputation</Text>
-              </View>
-            </View>
+        // If no profile data is found, create a default profile for the current user
+        const defaultProfile: Expert = {
+          id: 'current-user',
+          name: username || 'Anonymous',
+          avatar: 'https://i.pravatar.cc/150?img=4',
+          expertise: ['general'],
+          rating: 0,
+          currentQuestions: 0,
+          maxQuestions: 5,
+          validationCount: 0,
+          points: 0,
+          level: 1,
+          totalAnswers: 0,
+          totalValidations: 0,
+        };
 
-            <View style={styles.earningsSection}>
-              <Text style={styles.sectionTitle}>Your Earnings</Text>
-              <View style={styles.earningsCard}>
-                <View style={styles.earningsRow}>
-                  <View>
-                    <Text style={styles.earningsLabel}>Total Earned</Text>
-                    <Text style={styles.earningsAmount}>0 points</Text>
-                  </View>
-                  <View style={styles.earningsIcon}>
-                    <Ionicons name="star" size={24} color="#f59e0b" />
+        const profileData = viewedProfile || experts.find(e => e.name === username) || defaultProfile;
+        console.log('Profile Data:', profileData);
+        console.log('Username:', username);
+        console.log('Viewed Profile:', viewedProfile);
+
+        return (
+          <ScrollView style={styles.profileContainer}>
+            <View style={styles.profileContent}>
+              {viewedProfile && (
+                <TouchableOpacity 
+                  style={styles.backButton}
+                  onPress={() => {
+                    setViewedProfile(null);
+                    setActiveTab('home');
+                  }}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#64748b" />
+                  <Text style={styles.backButtonText}>Back to Feed</Text>
+                </TouchableOpacity>
+              )}
+              <View style={styles.profileHeader}>
+                <View style={styles.profileInfo}>
+                  <Image
+                    source={{ uri: profileData.avatar }}
+                    style={styles.profileAvatar}
+                  />
+                  <Text style={styles.profileName}>{profileData.name}</Text>
+                  <Text style={styles.profileStats}>Level {profileData.level} Expert</Text>
+                </View>
+              </View>
+              
+              <View style={styles.profileStats}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{profileData.totalAnswers}</Text>
+                  <Text style={styles.statLabel}>Answers</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{profileData.totalValidations}</Text>
+                  <Text style={styles.statLabel}>Validations</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{profileData.rating.toFixed(1)}</Text>
+                  <Text style={styles.statLabel}>Rating</Text>
+                </View>
+              </View>
+
+              <View style={styles.earningsSection}>
+                <Text style={styles.sectionTitle}>Expert Stats</Text>
+                <View style={styles.earningsCard}>
+                  <View style={styles.earningsRow}>
+                    <View>
+                      <Text style={styles.earningsLabel}>Total Points</Text>
+                      <Text style={styles.earningsAmount}>{profileData.points} points</Text>
+                    </View>
+                    <View style={styles.earningsIcon}>
+                      <Ionicons name="star" size={24} color="#f59e0b" />
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
 
-            <TouchableOpacity 
-              style={styles.logoutButton}
-              onPress={onLogout}
-            >
-              <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>Expertise Management</Text>
+                <View style={styles.settingCard}>
+                  {expertise.map((item) => (
+                    <View key={item.id} style={styles.expertiseItem}>
+                      <View style={styles.expertiseInfo}>
+                        <Text style={styles.expertiseName}>{item.name}</Text>
+                        <View style={styles.expertiseDetails}>
+                          <Text style={styles.expertiseLevel}>{item.level}</Text>
+                          <Text style={styles.expertiseYears}>{item.yearsOfExperience} years</Text>
+                        </View>
+                        {item.certifications?.map((cert, index) => (
+                          <Text key={index} style={styles.certification}>{cert}</Text>
+                        ))}
+                      </View>
+                      <TouchableOpacity style={styles.editButton}>
+                        <Ionicons name="pencil" size={20} color="#3b82f6" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.addButton}>
+                    <Ionicons name="add-circle-outline" size={20} color="#3b82f6" />
+                    <Text style={styles.addButtonText}>Add Expertise</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>Activity History</Text>
+                <View style={styles.settingCard}>
+                  {activities.map((activity) => (
+                    <View key={activity.id} style={styles.activityItem}>
+                      <View style={styles.activityIcon}>
+                        <Ionicons 
+                          name={
+                            activity.type === 'question' ? 'help-circle' :
+                            activity.type === 'answer' ? 'chatbubble' :
+                            activity.type === 'validation' ? 'checkmark-circle' :
+                            'star'
+                          } 
+                          size={24} 
+                          color="#3b82f6" 
+                        />
+                      </View>
+                      <View style={styles.activityInfo}>
+                        <Text style={styles.activityTitle}>{activity.title}</Text>
+                        <Text style={styles.activityDescription}>{activity.description}</Text>
+                        <Text style={styles.activityDate}>{formatDate(activity.date)}</Text>
+                      </View>
+                      {activity.points && (
+                        <View style={styles.pointsBadge}>
+                          <Text style={styles.pointsText}>+{activity.points}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>Preferences</Text>
+                <View style={styles.settingCard}>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>Preferred Topics</Text>
+                    <View style={styles.tagsContainer}>
+                      {preferences.preferredTopics.map((topic, index) => (
+                        <View key={index} style={styles.tag}>
+                          <Text style={styles.tagText}>#{topic}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>Language</Text>
+                    <TouchableOpacity style={styles.selectButton}>
+                      <Text style={styles.selectButtonText}>English</Text>
+                      <Ionicons name="chevron-down" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>Timezone</Text>
+                    <TouchableOpacity style={styles.selectButton}>
+                      <Text style={styles.selectButtonText}>America/Los_Angeles</Text>
+                      <Ionicons name="chevron-down" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>Theme</Text>
+                    <TouchableOpacity style={styles.selectButton}>
+                      <Text style={styles.selectButtonText}>Light</Text>
+                      <Ionicons name="chevron-down" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>Security</Text>
+                <View style={styles.settingCard}>
+                  <View style={styles.securityItem}>
+                    <View>
+                      <Text style={styles.securityTitle}>Two-Factor Authentication</Text>
+                      <Text style={styles.securityDescription}>Add an extra layer of security to your account</Text>
+                    </View>
+                    <Switch
+                      value={false}
+                      onValueChange={() => {}}
+                      trackColor={{ false: '#e2e8f0', true: '#3b82f6' }}
+                      thumbColor="#ffffff"
+                    />
+                  </View>
+                  <View style={styles.securityItem}>
+                    <Text style={styles.securityTitle}>Active Sessions</Text>
+                    {sessions.map((session) => (
+                      <View key={session.id} style={styles.sessionItem}>
+                        <View style={styles.sessionInfo}>
+                          <Text style={styles.sessionDevice}>{session.device}</Text>
+                          <Text style={styles.sessionDetails}>
+                            {session.location} • {formatDate(session.lastActive)}
+                          </Text>
+                        </View>
+                        {session.isCurrent ? (
+                          <View style={styles.currentSession}>
+                            <Text style={styles.currentSessionText}>Current</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity style={styles.endSessionButton}>
+                            <Text style={styles.endSessionText}>End Session</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>Data & Privacy</Text>
+                <View style={styles.settingCard}>
+                  <TouchableOpacity style={styles.dataItem}>
+                    <Ionicons name="download-outline" size={24} color="#3b82f6" />
+                    <View style={styles.dataInfo}>
+                      <Text style={styles.dataTitle}>Export Data</Text>
+                      <Text style={styles.dataDescription}>Download a copy of your data</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#64748b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.dataItem}>
+                    <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                    <View style={styles.dataInfo}>
+                      <Text style={styles.dataTitle}>Delete Account</Text>
+                      <Text style={styles.dataDescription}>Permanently delete your account and data</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {!viewedProfile && (
+                <TouchableOpacity 
+                  style={styles.logoutButton}
+                  onPress={onLogout}
+                >
+                  <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                  <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
         );
       default:
         return null;
@@ -753,7 +1158,7 @@ export default function TabView({ onLogout, username }: TabViewProps) {
       <ScrollView style={styles.content}>
         {renderContent()}
       </ScrollView>
-      
+
       <View style={[styles.tabBar, { paddingBottom: insets.bottom + 8 }]}>
         {tabs.map(({ key, label, icon, activeIcon, badge }) => (
           <TouchableOpacity
@@ -762,9 +1167,9 @@ export default function TabView({ onLogout, username }: TabViewProps) {
             onPress={() => setActiveTab(key)}
           >
             <View>
-              <Ionicons
+              <Ionicons 
                 name={activeTab === key ? activeIcon : icon}
-                size={24}
+                size={24} 
                 color={activeTab === key ? '#3b82f6' : '#64748b'}
               />
               {badge > 0 && (
@@ -846,13 +1251,18 @@ const styles = StyleSheet.create({
   feedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   feedTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#0f172a',
+  },
+  feedSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
   },
   filterButton: {
     padding: 8,
@@ -934,10 +1344,9 @@ const styles = StyleSheet.create({
     color: '#ef4444',
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#0f172a',
-    marginTop: 16,
     marginBottom: 12,
   },
   selectedTag: {
@@ -974,10 +1383,27 @@ const styles = StyleSheet.create({
     color: '#3b82f6',
     fontWeight: '600',
   },
+  profileContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  profileContent: {
+    flex: 1,
+    padding: 16,
+  },
   profileHeader: {
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   profileInfo: {
     alignItems: 'center',
@@ -992,8 +1418,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   statItem: {
     alignItems: 'center',
@@ -1008,15 +1443,63 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
   },
+  earningsSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  earningsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  earningsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  earningsLabel: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  earningsAmount: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginTop: 4,
+  },
+  earningsIcon: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 12,
+  },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     marginTop: 20,
+    marginHorizontal: 16,
     backgroundColor: '#fee2e2',
     borderRadius: 12,
-    marginHorizontal: 20,
   },
   logoutText: {
     color: '#ef4444',
@@ -1074,8 +1557,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b82f6',
   },
   emotionText: {
-    fontSize: 13,
-    color: '#475569',
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '500',
   },
   selectedEmotionText: {
     color: '#ffffff',
@@ -1142,54 +1626,69 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
   },
-  earningsSection: {
-    marginTop: 24,
-  },
-  earningsCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 8,
-  },
-  earningsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  earningsLabel: {
+  subtitle: {
     fontSize: 14,
     color: '#64748b',
+    marginBottom: 20,
+    lineHeight: 20,
   },
-  earningsAmount: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginTop: 4,
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 8,
   },
-  earningsIcon: {
-    backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 12,
-  },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+  emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    padding: 32,
+    marginTop: 32,
   },
-  badgeText: {
-    color: '#ffffff',
-    fontSize: 12,
+  emptyStateTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#0f172a',
+    marginTop: 16,
+    marginBottom: 8,
   },
-  beginnerBadge: {
-    backgroundColor: '#e0f2fe',
+  emptyStateText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    marginTop: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+  },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#f1f5f9',
+    shadowOpacity: 0,
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginHorizontal: 16,
+    fontWeight: '500',
   },
   validationContainer: {
     marginTop: 12,
@@ -1260,8 +1759,334 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  feedItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  authorInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  answerContainer: {
+    marginTop: 12,
+    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  answerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  answerText: {
+    fontSize: 16,
+    color: '#334155',
+    lineHeight: 24,
+  },
+  answererName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginTop: 12,
+  },
+  tagsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 12,
+    borderTopColor: '#f1f5f9',
+  },
+  colorStrip: {
+    flexDirection: 'row',
+    height: 2,
+    width: 60,
+    borderRadius: 1,
+    overflow: 'hidden',
+  },
+  colorSegment: {
+    flex: 1,
+  },
+  redSegment: {
+    backgroundColor: '#ef4444',
+  },
+  greenSegment: {
+    backgroundColor: '#22c55e',
+  },
+  blueSegment: {
+    backgroundColor: '#3b82f6',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  emotion: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  feedItemFooter: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 24,
+  },
+  actionText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginLeft: 4,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    marginBottom: 16,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#64748b',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  profileAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 16,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  expertiseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  expertiseInfo: {
+    flex: 1,
+  },
+  expertiseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  expertiseDetails: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  expertiseLevel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginRight: 8,
+  },
+  expertiseYears: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  certification: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginTop: 4,
+  },
+  editButton: {
+    padding: 8,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginTop: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    color: '#3b82f6',
+    marginLeft: 8,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityInfo: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  activityDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  activityDate: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  pointsBadge: {
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  preferenceItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  preferenceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  selectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: '#0f172a',
+  },
+  securityItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  securityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  securityDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  sessionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  sessionInfo: {
+    flex: 1,
+  },
+  sessionDevice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  sessionDetails: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  currentSession: {
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currentSessionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#16a34a',
+  },
+  endSessionButton: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  endSessionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  dataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  dataInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  dataTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  dataDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  settingsSection: {
+    marginBottom: 24,
+  },
+  settingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
 }); 
