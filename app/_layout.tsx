@@ -1,3 +1,4 @@
+import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, Session } from '@supabase/supabase-js';
 import { Slot, useRouter, useSegments } from 'expo-router';
@@ -70,9 +71,11 @@ export default function RootLayout() {
 
   // Always render the Slot to ensure the current route is displayed
   return (
-    <View style={{ flex: 1 }}>
-      <Slot />
-      <StatusBar style="auto" />
-    </View>
+    <WebSocketProvider>
+      <View style={{ flex: 1 }}>
+        <Slot />
+        <StatusBar style="auto" />
+      </View>
+    </WebSocketProvider>
   );
 }
